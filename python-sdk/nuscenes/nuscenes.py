@@ -493,6 +493,34 @@ class NuScenes:
     def list_sample(self, sample_token: str) -> None:
         self.explorer.list_sample(sample_token)
 
+    def get_image_path(self,
+                       sample_token: str,
+                       pointsensor_channel: str = 'LIDAR_TOP',
+                       camera_channel: str = 'CAM_FRONT'):
+
+        return self.explorer.get_image_path(sample_token,
+                                            pointsensor_channel = pointsensor_channel,
+                                            camera_channel = camera_channel)
+                                            
+    def getPCI(self, sample_token: str, dot_size: int = 5, pointsensor_channel: str = 'LIDAR_TOP',
+                                   camera_channel: str = 'CAM_FRONT', out_path: str = None,
+                                   render_intensity: bool = False,
+                                   show_lidarseg: bool = False,
+                                   filter_lidarseg_labels: List = None,
+                                   show_lidarseg_legend: bool = False,
+                                   verbose: bool = True,
+                                   lidarseg_preds_bin_path: str = None):
+                
+                return self.explorer.getPCI(sample_token, dot_size, pointsensor_channel=pointsensor_channel,
+                                                 camera_channel=camera_channel, out_path=out_path,
+                                                 render_intensity=render_intensity,
+                                                 show_lidarseg=show_lidarseg,
+                                                 filter_lidarseg_labels=filter_lidarseg_labels,
+                                                 show_lidarseg_legend=show_lidarseg_legend,
+                                                 verbose=verbose,
+                                                 lidarseg_preds_bin_path=lidarseg_preds_bin_path)
+
+
     def render_pointcloud_in_image(self, sample_token: str, dot_size: int = 5, pointsensor_channel: str = 'LIDAR_TOP',
                                    camera_channel: str = 'CAM_FRONT', out_path: str = None,
                                    render_intensity: bool = False,
@@ -509,6 +537,8 @@ class NuScenes:
                                                  show_lidarseg_legend=show_lidarseg_legend,
                                                  verbose=verbose,
                                                  lidarseg_preds_bin_path=lidarseg_preds_bin_path)
+
+
 
     def render_sample(self, sample_token: str, box_vis_level: BoxVisibility = BoxVisibility.ANY, nsweeps: int = 1,
                       out_path: str = None, show_lidarseg: bool = False,
@@ -737,10 +767,25 @@ class NuScenesExplorer:
             ann_record = self.nusc.get('sample_annotation', ann_token)
             print('sample_annotation_token: {}, category: {}'.format(ann_record['token'], ann_record['category_name']))
 
+    def get_image_path(self,
+                       sample_token: str,
+                       pointsensor_channel: str = 'LIDAR_TOP',
+                       camera_channel: str = 'CAM_FRONT'):
+        
+        sample_record = self.nusc.get('sample', sample_token)
+
+        # Here we just grab the front camera and the point sensor.
+        # pointsensor_token = sample_record['data'][pointsensor_channel]
+        camera_token = sample_record['data'][camera_channel]
+
+        cam = self.nusc.get('sample_data', camera_token)
+        im_path = osp.join(self.nusc.dataroot, cam['filename'])
+        return im_path
+
     def map_pointcloud_to_image(self,
                                 pointsensor_token: str,
                                 camera_token: str,
-                                min_dist: float = 1.0,
+                                min_dist: float = 0.0,
                                 render_intensity: bool = False,
                                 show_lidarseg: bool = False,
                                 filter_lidarseg_labels: List = None,
@@ -852,7 +897,7 @@ class NuScenesExplorer:
         mask = np.ones(depths.shape[0], dtype=bool)
         mask = np.logical_and(mask, depths > min_dist)
         mask = np.logical_and(mask, points[0, :] > 1)
-        mask = np.logical_and(mask, points[0, :] < im.size[0] - 1)
+        mask = np.logical_and(mask, points[0, :] < im.size[0] - 1) #Matching with the image
         mask = np.logical_and(mask, points[1, :] > 1)
         mask = np.logical_and(mask, points[1, :] < im.size[1] - 1)
         points = points[:, mask]
@@ -860,6 +905,35 @@ class NuScenesExplorer:
 
         return points, coloring, im
 
+    def getPCI(self,
+               sample_token: str,
+               dot_size: int = 5,
+               pointsensor_channel: str = 'LIDAR_TOP',
+               camera_channel: str = 'CAM_FRONT',
+               out_path: str = None,
+               render_intensity: bool = False,
+               show_lidarseg: bool = False,
+               filter_lidarseg_labels: List = None,
+               ax: Axes = None,
+               show_lidarseg_legend: bool = False,
+               verbose: bool = True,
+               lidarseg_preds_bin_path: str = None):
+
+        '''
+        Get the PointCloud and Image in a single frame
+        '''
+
+        sample_record = self.nusc.get('sample', sample_token)
+
+        # Here we just grab the front camera and the point sensor.
+        pointsensor_token = sample_record['data'][pointsensor_channel]
+        camera_token = sample_record['data'][camera_channel]
+
+        return self.map_pointcloud_to_image(pointsensor_token, camera_token,
+                                                            render_intensity=render_intensity,
+                                                            show_lidarseg=show_lidarseg,
+                                                            filter_lidarseg_labels=filter_lidarseg_labels,
+                                                            lidarseg_preds_bin_path=lidarseg_preds_bin_path)
     def render_pointcloud_in_image(self,
                                    sample_token: str,
                                    dot_size: int = 5,
@@ -902,6 +976,7 @@ class NuScenesExplorer:
                                                             filter_lidarseg_labels=filter_lidarseg_labels,
                                                             lidarseg_preds_bin_path=lidarseg_preds_bin_path)
 
+        
         # Init axes.
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(9, 16))
@@ -911,9 +986,10 @@ class NuScenesExplorer:
                 fig.canvas.set_window_title(sample_token)
         else:  # Set title on if rendering as part of render_sample.
             ax.set_title(camera_channel)
-        ax.imshow(im)
         ax.scatter(points[0, :], points[1, :], c=coloring, s=dot_size)
-        ax.axis('off')
+        ax.imshow(im)
+        # print(im)
+        # ax.axis('off')
 
         # Produce a legend with the unique colors from the scatter.
         if pointsensor_channel == 'LIDAR_TOP' and show_lidarseg and show_lidarseg_legend:
