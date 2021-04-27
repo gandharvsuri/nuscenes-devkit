@@ -1176,7 +1176,7 @@ class NuScenesExplorer:
                            show_lidarseg_legend: bool = False,
                            filter_lidarseg_labels: List = None,
                            lidarseg_preds_bin_path: str = None,
-                           verbose: bool = True) -> None:
+                           verbose: bool = True):
         """
         Render sample data onto axis.
         :param sample_data_token: Sample_data token.
@@ -1203,7 +1203,7 @@ class NuScenesExplorer:
         # Get sensor modality.
         sd_record = self.nusc.get('sample_data', sample_data_token)
         sensor_modality = sd_record['sensor_modality']
-
+        
         if sensor_modality in ['lidar', 'radar']:
             sample_rec = self.nusc.get('sample', sd_record['sample_token'])
             chan = sd_record['channel']
@@ -1395,7 +1395,7 @@ class NuScenesExplorer:
                           view: np.ndarray = np.eye(4),
                           box_vis_level: BoxVisibility = BoxVisibility.ANY,
                           out_path: str = None,
-                          extra_info: bool = False) -> None:
+                          extra_info: bool = False):
         """
         Render selected annotation.
         :param anntoken: Sample_annotation token.
@@ -1440,6 +1440,7 @@ class NuScenesExplorer:
 
         # Plot CAMERA view.
         data_path, boxes, camera_intrinsic = self.nusc.get_sample_data(cam, selected_anntokens=[anntoken])
+        # return data_path, boxes, camera_intrinsic
         im = Image.open(data_path)
         axes[1].imshow(im)
         axes[1].set_title(self.nusc.get('sample_data', cam)['channel'])
@@ -1477,6 +1478,8 @@ class NuScenesExplorer:
 
         if out_path is not None:
             plt.savefig(out_path)
+        
+        plt.show()
 
     def render_instance(self,
                         instance_token: str,
@@ -2002,6 +2005,38 @@ class NuScenesExplorer:
             assert total_num_samples == i, 'Error: There were supposed to be {} keyframes, ' \
                                            'but only {} keyframes were processed'.format(total_num_samples, i)
             out.release()
+
+    def render_pointcloud_in_box(self,
+                                box,
+                                points,
+                                coloring,
+                                axis:Axes, 
+                                view: np.ndarray = np.eye(3),
+                                normalize: bool = False,
+                                colors: Tuple = ('b', 'r', 'k'),
+                                linewidth: float = 2):
+
+        corners = view_points(box.corners(), view, normalize=normalize)[:2, :]
+        corners = box.extremePoints(corners)
+
+        def draw_rect(selected_corners, color):
+            prev = selected_corners[-1]
+            for corner in selected_corners:
+                axis.plot([prev[0], corner[0]], [prev[1], corner[1]], color=color, linewidth=linewidth)
+                prev = corner
+
+        draw_rect(corners, colors[0])  
+
+        corners = corners.T
+
+        corners[0][::-1].sort()
+        corners[1][::-1].sort()
+
+        right = corners[0][1]
+        left = corners[0][-2]
+        top = corners[1][2] 
+        bottom = corners[1][-2]
+        
 
     def render_scene_lidarseg(self,
                               scene_token: str,

@@ -536,7 +536,7 @@ class Box:
         self.orientation = quaternion * self.orientation
         self.velocity = np.dot(quaternion.rotation_matrix, self.velocity)
 
-    def corners(self, wlh_factor: float = 1.0) -> np.ndarray:
+    def corners(self, wlh_factor: float = 1.0):
         """
         Returns the bounding box corners.
         :param wlh_factor: Multiply w, l, h by a factor to scale the box.
@@ -544,7 +544,7 @@ class Box:
             The last four are the ones facing backwards.
         """
         w, l, h = self.wlh * wlh_factor
-
+        
         # 3D bounding box corners. (Convention: x points forward, y to the left, z up.)
         x_corners = l / 2 * np.array([1,  1,  1,  1, -1, -1, -1, -1])
         y_corners = w / 2 * np.array([1, -1, -1,  1,  1, -1, -1,  1])
@@ -561,6 +561,49 @@ class Box:
         corners[2, :] = corners[2, :] + z
 
         return corners
+    
+    def extremePoints(self,
+                      view: np.ndarray = np.eye(3),
+                      normalize: bool = False):
+        corners = view_points(self.corners(), view, normalize=normalize)[:2, :]
+        # corners.sort(key = lambda x : abs(x[0] - self.center[0]), reverse = True)
+        corners = corners.T
+        corners = corners[corners[:,0].argsort()]
+        corners = np.array([corners[0],corners[1],corners[-1],corners[-2]])
+        corners = corners.T
+        l = np.min(corners[0]) # left limit
+        r = np.max(corners[0]) # right limit
+        t = np.max(corners[1]) # top limit
+        b = np.min(corners[1]) # bottom limit
+
+        return np.array([[l,b], [r,b], [r,t], [l,t]])
+        
+
+    def get2Dbox(self,
+                 axis: Axes,
+                 view: np.ndarray = np.eye(3),
+                 normalize: bool = False,
+                 colors: Tuple = ('b', 'r', 'k'),
+                 linewidth: float = 2):
+
+        
+        corners = self.extremePoints(view=view, normalize=normalize)
+
+
+        def draw_rect(selected_corners, color):
+            prev = selected_corners[-1]
+            for corner in selected_corners:
+                axis.plot([prev[0], corner[0]], [prev[1], corner[1]], color=color, linewidth=linewidth)
+                prev = corner
+
+        draw_rect(corners, colors[0])
+    
+        # def draw_rect(selected_corners, color):
+        #     prev = selected_corners[-1]
+        #     for corner in selected_corners:
+        #         axis.plot([prev[0], corner[0]], [prev[1], corner[1]], color=color, linewidth=linewidth)
+        #         prev = corner
+        
 
     def bottom_corners(self) -> np.ndarray:
         """
@@ -599,8 +642,9 @@ class Box:
                       color=colors[2], linewidth=linewidth)
 
         # Draw front (first 4 corners) and rear (last 4 corners) rectangles(3d)/lines(2d)
+        # print(corners.shape)
         draw_rect(corners.T[:4], colors[0])
-        draw_rect(corners.T[4:], colors[1])
+        draw_rect(corners.T[4:], colors[0])
 
         # Draw line indicating the front
         center_bottom_forward = np.mean(corners.T[2:4], axis=0)
